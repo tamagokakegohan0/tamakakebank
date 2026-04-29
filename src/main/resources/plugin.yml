@@ -1,0 +1,21 @@
+name: TamakakeBank
+version: 1.0
+main: tamakake.Tamakakebank
+api-version: 1.20
+
+depend: [Vault]
+
+commands:
+  bank:
+  bal:
+  balance:
+  money:
+  bankop:
+  atm:
+  pay:
+  baltop:
+  loan:
+
+permissions:
+  tamakakebank.admin:
+    default: op
