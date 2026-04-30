@@ -2,9 +2,8 @@ package tamakake.command;
 
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
+import org.bukkit.command.*;
+import net.milkbowl.vault.economy.Economy;
 import tamakake.Tamakakebank;
 
 import java.util.UUID;
@@ -17,16 +16,21 @@ public class BankOpCommand implements CommandExecutor {
         this.plugin = plugin;
     }
 
+    // Vault取得（方法A）
+    private Economy eco() {
+        return Bukkit.getServicesManager()
+                .getRegistration(Economy.class)
+                .getProvider();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
-        // ================= 権限チェック（最重要） =================
         if (!sender.hasPermission("tamakakebank.admin")) {
             sender.sendMessage("§c権限がありません");
             return true;
         }
 
-        // ================= 引数チェック =================
         if (args.length < 3) {
             sender.sendMessage("§c使い方: /bankop setbank <player> <金額>");
             return true;
@@ -37,12 +41,11 @@ public class BankOpCommand implements CommandExecutor {
             return true;
         }
 
-        // ================= プレイヤー取得 =================
         OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
         UUID uuid = target.getUniqueId();
 
-        // ================= 金額チェック =================
         long amount;
+
         try {
             amount = Long.parseLong(args[2]);
         } catch (NumberFormatException e) {
@@ -51,17 +54,23 @@ public class BankOpCommand implements CommandExecutor {
         }
 
         if (amount < 0) {
-            sender.sendMessage("§cマイナスは不可");
+            sender.sendMessage("§cマイナスは使えません");
             return true;
         }
 
-        // ================= MySQL更新 =================
-        plugin.getMysql().setBalance(uuid, amount);
+        // =========================
+        // 💥 Vaultを直接操作（これが正解）
+        // =========================
 
-        // ================= メッセージ =================
-        String name = target.getName() != null ? target.getName() : "Unknown";
+        double current = eco().getBalance(target);
 
-        sender.sendMessage("§a" + name + " の残高を §e" + amount + "円 §aに設定しました");
+        if (current > amount) {
+            eco().withdrawPlayer(target, current - amount);
+        } else {
+            eco().depositPlayer(target, amount - current);
+        }
+
+        sender.sendMessage("§a" + target.getName() + " の所持金を §e" + amount + "円 §aに設定しました");
 
         return true;
     }
