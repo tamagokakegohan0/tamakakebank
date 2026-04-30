@@ -32,6 +32,7 @@ public class MySQLManager {
             plugin.getLogger().info("MySQL接続成功");
 
         } catch (Exception e) {
+            plugin.getLogger().warning("MySQL接続失敗");
             e.printStackTrace();
         }
     }
@@ -137,9 +138,9 @@ public class MySQLManager {
         long newDebt = getDebt(uuid) + amount;
         setDebt(uuid, newDebt);
 
-        // 初回借金なら期限設定（7日）
+        // ★ 5日期限
         if (getLoanDue(uuid) == null) {
-            setLoanDue(uuid, new java.util.Date(System.currentTimeMillis() + 7L * 86400000));
+            setLoanDue(uuid, new java.util.Date(System.currentTimeMillis() + 5L * 86400000));
         }
     }
 
@@ -217,11 +218,13 @@ public class MySQLManager {
 
     // ================= 全ユーザー =================
     public List<UUID> getAllUsers() {
+
         List<UUID> list = new ArrayList<>();
 
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT uuid FROM bank_data"
         )) {
+
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
