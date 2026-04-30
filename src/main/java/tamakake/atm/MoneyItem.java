@@ -14,7 +14,8 @@ public class MoneyItem {
         ItemStack item = new ItemStack(Material.PAPER);
         ItemMeta meta = item.getItemMeta();
 
-        meta.setDisplayName("§e" + value + "円札");
+        // ★ コンマ付き＋円だけ
+        meta.setDisplayName("§e" + format(value));
 
         meta.getPersistentDataContainer().set(
                 new NamespacedKey(Tamakakebank.getInstance(), "money"),
@@ -38,5 +39,10 @@ public class MoneyItem {
         );
 
         return value == null ? 0 : value;
+    }
+
+    // ★ コンマ処理
+    private static String format(long amount) {
+        return String.format("%,d円", amount);
     }
 }

@@ -5,12 +5,9 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.*;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import tamakake.Tamakakebank;
 
 public class ATMListener implements Listener {
@@ -21,7 +18,7 @@ public class ATMListener implements Listener {
         this.plugin = plugin;
     }
 
-    // ================= クリック処理 =================
+    // ================= GUIクリック =================
     @EventHandler
     public void onClick(InventoryClickEvent e) {
 
@@ -29,130 +26,103 @@ public class ATMListener implements Listener {
 
         String title = e.getView().getTitle();
 
-        if (!isATM(title)) return;
-
-        ItemStack item = e.getCurrentItem();
-
-        // ================= ATMメニュー =================
-        if (title.equals("ATM")) {
-
-            e.setCancelled(true);
-
-            if (item == null) return;
-
-            Material type = item.getType();
-
-            if (type == Material.CHEST) {
-                openDepositMenu(player);
-            }
-
-            if (type == Material.FURNACE) {
-                openWithdrawMenu(player);
-            }
-
-            return;
-        }
-
-        // ================= 出金 =================
-        if (title.equals("出金")) {
-
-            e.setCancelled(true);
-
-            if (item == null) return;
-
-            long amount = MoneyItem.getValue(item);
-            if (amount <= 0) return;
-
-            long balance = plugin.getMysql().getBalance(player.getUniqueId());
-
-            if (balance < amount) {
-                player.sendMessage("§cお金が足りません");
-                return;
-            }
-
-            plugin.getMysql().removeBalance(player.getUniqueId(), amount);
-            player.getInventory().addItem(MoneyItem.create(amount));
-
-            player.sendMessage("§a" + amount + "円 出金しました");
-
-            return;
-        }
-
-        // ================= 入金 =================
+        // ================= 入金GUI =================
         if (title.equals("入金")) {
 
-            // ★重要：ここはキャンセルしない（入金できるようにする）
-            e.setCancelled(false);
+            // 下のプレイヤーインベントリはOK
+            if (e.getClickedInventory() == null) return;
+
+            if (e.getClickedInventory().equals(e.getView().getTopInventory())) {
+                e.setCancelled(true);
+            }
+
+            return;
+        }
+
+        // ================= ATMメイン =================
+        if (title.equals("ATM")) {
+
+            e.setCancelled(true); // ★全部操作禁止
+
+            if (e.getCurrentItem() == null) return;
+
+            Material type = e.getCurrentItem().getType();
+
+            // 入金ボタン
+            if (type == Material.EMERALD_BLOCK) {
+                openDepositGUI(player);
+            }
+
+            // 出金ボタン
+            if (type == Material.REDSTONE_BLOCK) {
+                withdraw(player, 1000); // デフォ1000円
+            }
         }
     }
 
-    // ================= ドラッグ防止 =================
-    @EventHandler
-    public void onDrag(InventoryDragEvent e) {
-
-        if (!isATM(e.getView().getTitle())) return;
-
-        e.setCancelled(true);
-    }
-
-    // ================= 入金確定 =================
+    // ================= GUI閉じた時（入金処理） =================
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
 
-        if (!e.getView().getTitle().equals("入金")) return;
+        if (!(e.getPlayer() instanceof Player player)) return;
 
-        Player player = (Player) e.getPlayer();
+        String title = e.getView().getTitle();
+
+        if (!title.equals("入金")) return;
+
+        Inventory inv = e.getInventory();
 
         long total = 0;
 
-        for (ItemStack item : e.getInventory().getContents()) {
-
-            long value = MoneyItem.getValue(item);
-
-            if (value > 0) {
-                total += value;
-            }
+        for (ItemStack item : inv.getContents()) {
+            total += MoneyItem.getValue(item);
         }
 
-        if (total > 0) {
-            plugin.getMysql().addBalance(player.getUniqueId(), total);
-            player.sendMessage("§a" + total + "円 入金しました");
-        }
+        if (total <= 0) return;
+
+        // ★Vaultに入金
+        plugin.getEconomy().depositPlayer(player, total);
+
+        player.sendMessage("§a" + format(total) + " 入金しました");
     }
 
-    // ================= GUI =================
-    private void openDepositMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 54, "入金");
-        player.openInventory(inv);
-    }
+    // ================= 入金GUI =================
+    private void openDepositGUI(Player player) {
 
-    private void openWithdrawMenu(Player player) {
+        Inventory inv = Bukkit.createInventory(null, 27, "入金");
 
-        Inventory inv = Bukkit.createInventory(null, 27, "出金");
-
-        int[] amounts = {10, 100, 1000, 10000, 100000, 1000000};
-        int[] slots = {10, 11, 12, 14, 15, 16};
-
+        // ガラスで枠（任意）
         ItemStack glass = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta meta = glass.getItemMeta();
-        meta.setDisplayName(" ");
-        glass.setItemMeta(meta);
-
         for (int i = 0; i < 27; i++) {
             inv.setItem(i, glass);
         }
 
-        for (int i = 0; i < amounts.length; i++) {
-            inv.setItem(slots[i], MoneyItem.create(amounts[i]));
-        }
+        // 中央だけ空ける（ここに紙幣入れる）
+        inv.setItem(13, null);
 
         player.openInventory(inv);
     }
 
-    // ================= 判定 =================
-    private boolean isATM(String title) {
-        return title.equals("ATM")
-                || title.equals("出金")
-                || title.equals("入金");
+    // ================= 出金 =================
+    private void withdraw(Player player, long amount) {
+
+        double balance = plugin.getEconomy().getBalance(player);
+
+        if (balance < amount) {
+            player.sendMessage("§cお金が足りません");
+            return;
+        }
+
+        plugin.getEconomy().withdrawPlayer(player, amount);
+
+        // 紙幣を渡す
+        player.getInventory().addItem(MoneyItem.create(amount));
+
+        player.sendMessage("§a" + format(amount) + " 出金しました");
+    }
+
+    // ================= コンマ =================
+    private String format(long amount) {
+        return String.format("%,d円", amount);
     }
 }
