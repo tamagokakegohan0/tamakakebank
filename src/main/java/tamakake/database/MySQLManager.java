@@ -14,17 +14,17 @@ public class MySQLManager {
         this.plugin = plugin;
     }
 
-    // ================= CONNECT =================
+    // ================= 接続 =================
     public void connect() {
         try {
-            String host = plugin.getConfig().getString("database.host");
-            int port = plugin.getConfig().getInt("database.port");
-            String db = plugin.getConfig().getString("database.database");
-            String user = plugin.getConfig().getString("database.user");
-            String pass = plugin.getConfig().getString("database.password");
+            String host = plugin.getConfig().getString("mysql.host");
+            int port = plugin.getConfig().getInt("mysql.port");
+            String db = plugin.getConfig().getString("mysql.database");
+            String user = plugin.getConfig().getString("mysql.user");
+            String pass = plugin.getConfig().getString("mysql.password");
 
             connection = DriverManager.getConnection(
-                    "jdbc:mysql://" + host + ":" + port + "/" + db + "?useSSL=false",
+                    "jdbc:mysql://" + host + ":" + port + "/" + db + "?useSSL=false&autoReconnect=true",
                     user,
                     pass
             );
@@ -32,7 +32,6 @@ public class MySQLManager {
             plugin.getLogger().info("MySQL接続成功");
 
         } catch (Exception e) {
-            plugin.getLogger().severe("MySQL接続失敗");
             e.printStackTrace();
         }
     }
@@ -41,18 +40,18 @@ public class MySQLManager {
         return connection;
     }
 
-    // ================= TABLE =================
+    // ================= テーブル =================
     public void createTables() {
         try (Statement st = connection.createStatement()) {
 
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS bank_data (
                     uuid VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(16),
                     balance BIGINT DEFAULT 0,
                     debt BIGINT DEFAULT 0,
                     loan_level INT DEFAULT 0,
-                    loan_success INT DEFAULT 0,
-                    loan_due DATE DEFAULT NULL
+                    loan_due DATE
                 )
             """);
 
@@ -61,146 +60,178 @@ public class MySQLManager {
         }
     }
 
-    // ================= REGISTER =================
+    // ================= プレイヤー登録 =================
     public void registerPlayer(UUID uuid, String name) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT IGNORE INTO bank_data (uuid, balance, debt) VALUES (?,0,0)")) {
-
+                "INSERT IGNORE INTO bank_data (uuid, name) VALUES (?, ?)"
+        )) {
             ps.setString(1, uuid.toString());
+            ps.setString(2, name);
             ps.executeUpdate();
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // ================= BALANCE =================
+    // ================= 残高 =================
     public long getBalance(UUID uuid) {
-        return getLong(uuid, "balance");
-    }
-
-    public void addBalance(UUID uuid, long amount) {
-        setLong(uuid, "balance", getBalance(uuid) + amount);
-    }
-
-    public void removeBalance(UUID uuid, long amount) {
-        setLong(uuid, "balance", Math.max(0, getBalance(uuid) - amount));
-    }
-
-    public void setBalance(UUID uuid, long amount) {
-        setLong(uuid, "balance", amount);
-    }
-
-    // ================= DEBT =================
-    public long getDebt(UUID uuid) {
-        return getLong(uuid, "debt");
-    }
-
-    public void addDebt(UUID uuid, long amount) {
-        setLong(uuid, "debt", getDebt(uuid) + amount);
-    }
-
-    public void removeDebt(UUID uuid, long amount) {
-        setLong(uuid, "debt", Math.max(0, getDebt(uuid) - amount));
-    }
-
-    // ================= LOAN =================
-    public int getLoanLevel(UUID uuid) {
-        return (int) getLong(uuid, "loan_level");
-    }
-
-    public void setLoanLevel(UUID uuid, int value) {
-        setLong(uuid, "loan_level", value);
-    }
-
-    public int getLoanSuccess(UUID uuid) {
-        return (int) getLong(uuid, "loan_success");
-    }
-
-    public void setLoanSuccess(UUID uuid, int value) {
-        setLong(uuid, "loan_success", value);
-    }
-
-    // ================= LOAN DUE =================
-    public String getLoanDue(UUID uuid) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT loan_due FROM bank_data WHERE uuid=?")) {
-
+                "SELECT balance FROM bank_data WHERE uuid=?"
+        )) {
             ps.setString(1, uuid.toString());
             ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                java.sql.Date date = rs.getDate("loan_due");
-                return date != null ? date.toString() : null;
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
-    public void setLoanDue(UUID uuid, String date) {
-        try (PreparedStatement ps = connection.prepareStatement("""
-            UPDATE bank_data SET loan_due=? WHERE uuid=?
-        """)) {
-
-            ps.setString(1, date);
-            ps.setString(2, uuid.toString());
-            ps.executeUpdate();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    // ================= CORE =================
-    private long getLong(UUID uuid, String column) {
-
-        try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT " + column + " FROM bank_data WHERE uuid=?")) {
-
-            ps.setString(1, uuid.toString());
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) return rs.getLong(column);
-
+            if (rs.next()) return rs.getLong("balance");
         } catch (Exception e) {
             e.printStackTrace();
         }
         return 0;
     }
 
-    private void setLong(UUID uuid, String column, long value) {
-
+    public void setBalance(UUID uuid, long amount) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "UPDATE bank_data SET " + column + "=? WHERE uuid=?")) {
-
-            ps.setLong(1, value);
+                "UPDATE bank_data SET balance=? WHERE uuid=?"
+        )) {
+            ps.setLong(1, amount);
             ps.setString(2, uuid.toString());
             ps.executeUpdate();
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // ================= USERS =================
-    public Set<UUID> getAllUsers() {
+    public void addBalance(UUID uuid, long amount) {
+        setBalance(uuid, getBalance(uuid) + amount);
+    }
 
-        Set<UUID> set = new HashSet<>();
+    public void removeBalance(UUID uuid, long amount) {
+        setBalance(uuid, Math.max(0, getBalance(uuid) - amount));
+    }
 
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery("SELECT uuid FROM bank_data")) {
+    // ================= 借金 =================
+    public long getDebt(UUID uuid) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT debt FROM bank_data WHERE uuid=?"
+        )) {
+            ps.setString(1, uuid.toString());
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return rs.getLong("debt");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    public void setDebt(UUID uuid, long amount) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE bank_data SET debt=? WHERE uuid=?"
+        )) {
+            ps.setLong(1, amount);
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void addDebt(UUID uuid, long amount) {
+        long newDebt = getDebt(uuid) + amount;
+        setDebt(uuid, newDebt);
+
+        // 初回借金なら期限設定（7日）
+        if (getLoanDue(uuid) == null) {
+            setLoanDue(uuid, new java.util.Date(System.currentTimeMillis() + 7L * 86400000));
+        }
+    }
+
+    public void removeDebt(UUID uuid, long amount) {
+        long newDebt = Math.max(0, getDebt(uuid) - amount);
+        setDebt(uuid, newDebt);
+
+        if (newDebt == 0) {
+            clearLoanDue(uuid);
+        }
+    }
+
+    // ================= レベル =================
+    public int getLoanLevel(UUID uuid) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT loan_level FROM bank_data WHERE uuid=?"
+        )) {
+            ps.setString(1, uuid.toString());
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return rs.getInt("loan_level");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    public void setLoanLevel(UUID uuid, int level) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE bank_data SET loan_level=? WHERE uuid=?"
+        )) {
+            ps.setInt(1, level);
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ================= 期限 =================
+    public java.util.Date getLoanDue(UUID uuid) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT loan_due FROM bank_data WHERE uuid=?"
+        )) {
+            ps.setString(1, uuid.toString());
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return rs.getDate("loan_due");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public void setLoanDue(UUID uuid, java.util.Date date) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE bank_data SET loan_due=? WHERE uuid=?"
+        )) {
+            ps.setDate(1, new java.sql.Date(date.getTime()));
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void clearLoanDue(UUID uuid) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE bank_data SET loan_due=NULL WHERE uuid=?"
+        )) {
+            ps.setString(1, uuid.toString());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ================= 全ユーザー =================
+    public List<UUID> getAllUsers() {
+        List<UUID> list = new ArrayList<>();
+
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT uuid FROM bank_data"
+        )) {
+            ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                set.add(UUID.fromString(rs.getString("uuid")));
+                list.add(UUID.fromString(rs.getString("uuid")));
             }
 
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-        return set;
+        return list;
     }
 }

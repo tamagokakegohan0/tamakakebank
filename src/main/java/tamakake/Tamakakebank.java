@@ -27,6 +27,7 @@ public class Tamakakebank extends JavaPlugin {
 
         instance = this;
 
+        // ================= Config =================
         saveDefaultConfig();
 
         // ================= MySQL =================
@@ -53,35 +54,20 @@ public class Tamakakebank extends JavaPlugin {
 
         this.economy = vault;
 
-        // ================= Commands =================
+        // ================= コマンド登録 =================
         registerCommands();
 
-        // ================= Listeners =================
+        // ================= Listener登録 =================
         Bukkit.getPluginManager().registerEvents(new PlayerJoinListener(this), this);
         Bukkit.getPluginManager().registerEvents(new ATMListener(this), this);
         Bukkit.getPluginManager().registerEvents(new ATMItemListener(this), this);
 
-        // ================= Loan =================
+        // ================= 借金利息タスク =================
+        // 1時間ごとに実行（調整可能）
         new LoanInterestTask(this)
                 .runTaskTimer(this, 20L * 60L * 60L, 20L * 60L * 60L);
 
         getLogger().info("TamakakeBank 起動完了");
-    }
-
-    private void registerCommands() {
-
-        BankCommand bank = new BankCommand(this);
-
-        getCommand("bank").setExecutor(bank);
-        getCommand("bal").setExecutor(bank);
-        getCommand("balance").setExecutor(bank);
-        getCommand("money").setExecutor(bank);
-
-        getCommand("atm").setExecutor(new ATMCommand(this));
-        getCommand("pay").setExecutor(new PayCommand(this));
-        getCommand("bankop").setExecutor(new BankOpCommand(this));
-        getCommand("loan").setExecutor(new LoanCommand(this));
-        getCommand("baltop").setExecutor(new BalTopCommand(this));
     }
 
     @Override
@@ -93,6 +79,36 @@ public class Tamakakebank extends JavaPlugin {
         }
     }
 
+    // ================= コマンド登録 =================
+    private void registerCommands() {
+
+        BankCommand bank = new BankCommand(this);
+
+        // 残高系
+        getCommand("bank").setExecutor(bank);
+        getCommand("bal").setExecutor(bank);
+        getCommand("balance").setExecutor(bank);
+        getCommand("money").setExecutor(bank);
+
+        // ATM
+        getCommand("atm").setExecutor(new ATMCommand(this));
+
+        // 支払い
+        getCommand("pay").setExecutor(new PayCommand(this));
+
+        // 管理者
+        getCommand("bankop").setExecutor(new BankOpCommand(this));
+
+        // 借金
+        getCommand("loan").setExecutor(new LoanCommand(this));
+
+        // ランキング（ある場合）
+        if (getCommand("baltop") != null) {
+            getCommand("baltop").setExecutor(new BalTopCommand(this));
+        }
+    }
+
+    // ================= Getter =================
     public static Tamakakebank getInstance() {
         return instance;
     }
