@@ -80,13 +80,13 @@ public class ATMListener implements Listener {
             player.sendMessage("§a" + String.format("%,d円 出金しました", value));
         }
 
-        // ================= 入金（クリックでは何もしない） =================
+        // ================= 入金（クリックでは処理しない） =================
         if (title.equals("入金")) {
-            // ここは削除ではなく無効（閉じる処理に移動）
+            // ★ 何もしない（Closeで処理する）
         }
     }
 
-    // ===== 入金確定（★ここが本体）=====
+    // ================= 入金確定（★最重要修正） =================
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
 
@@ -94,16 +94,18 @@ public class ATMListener implements Listener {
 
         Player player = (Player) e.getPlayer();
 
-        int total = 0;
+        long total = 0;
 
-        for (ItemStack item : e.getInventory().getContents()) {
+        // ★ 上のGUIだけを見る
+        for (ItemStack item : e.getView().getTopInventory().getContents()) {
 
             if (item == null) continue;
 
             long value = MoneyItem.getValue(item);
 
             if (value > 0) {
-                total += value;
+                // ★ 枚数対応（ここ超重要）
+                total += value * item.getAmount();
             }
         }
 
@@ -112,7 +114,8 @@ public class ATMListener implements Listener {
             player.sendMessage("§a" + String.format("%,d円 入金しました", total));
         }
 
-        e.getInventory().clear();
+        // ★ 中身クリア（重複防止）
+        e.getView().getTopInventory().clear();
     }
 
     // ===== 入金GUI =====
