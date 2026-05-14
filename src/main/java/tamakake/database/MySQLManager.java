@@ -1,5 +1,6 @@
 package tamakake.database;
 
+import org.bukkit.Bukkit;
 import tamakake.Tamakakebank;
 
 import java.sql.*;
@@ -69,6 +70,19 @@ public class MySQLManager {
             ps.setString(1, uuid.toString());
             ps.setString(2, name);
             ps.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // ★ 名前更新
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE bank_data SET name=? WHERE uuid=?"
+        )) {
+            ps.setString(1, name);
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -80,11 +94,17 @@ public class MySQLManager {
                 "SELECT balance FROM bank_data WHERE uuid=?"
         )) {
             ps.setString(1, uuid.toString());
+
             ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getLong("balance");
+
+            if (rs.next()) {
+                return rs.getLong("balance");
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return 0;
     }
 
@@ -92,9 +112,12 @@ public class MySQLManager {
         try (PreparedStatement ps = connection.prepareStatement(
                 "UPDATE bank_data SET balance=? WHERE uuid=?"
         )) {
+
             ps.setLong(1, amount);
             ps.setString(2, uuid.toString());
+
             ps.executeUpdate();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -110,42 +133,59 @@ public class MySQLManager {
 
     // ================= 借金 =================
     public long getDebt(UUID uuid) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT debt FROM bank_data WHERE uuid=?"
         )) {
+
             ps.setString(1, uuid.toString());
+
             ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getLong("debt");
+
+            if (rs.next()) {
+                return rs.getLong("debt");
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return 0;
     }
 
     public void setDebt(UUID uuid, long amount) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "UPDATE bank_data SET debt=? WHERE uuid=?"
         )) {
+
             ps.setLong(1, amount);
             ps.setString(2, uuid.toString());
+
             ps.executeUpdate();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void addDebt(UUID uuid, long amount) {
+
         long newDebt = getDebt(uuid) + amount;
+
         setDebt(uuid, newDebt);
 
         // ★ 5日期限
         if (getLoanDue(uuid) == null) {
-            setLoanDue(uuid, new java.util.Date(System.currentTimeMillis() + 5L * 86400000));
+            setLoanDue(uuid,
+                    new java.util.Date(System.currentTimeMillis() + 5L * 86400000));
         }
     }
 
     public void removeDebt(UUID uuid, long amount) {
+
         long newDebt = Math.max(0, getDebt(uuid) - amount);
+
         setDebt(uuid, newDebt);
 
         if (newDebt == 0) {
@@ -155,25 +195,37 @@ public class MySQLManager {
 
     // ================= レベル =================
     public int getLoanLevel(UUID uuid) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT loan_level FROM bank_data WHERE uuid=?"
         )) {
+
             ps.setString(1, uuid.toString());
+
             ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getInt("loan_level");
+
+            if (rs.next()) {
+                return rs.getInt("loan_level");
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return 0;
     }
 
     public void setLoanLevel(UUID uuid, int level) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "UPDATE bank_data SET loan_level=? WHERE uuid=?"
         )) {
+
             ps.setInt(1, level);
             ps.setString(2, uuid.toString());
+
             ps.executeUpdate();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -181,36 +233,52 @@ public class MySQLManager {
 
     // ================= 期限 =================
     public java.util.Date getLoanDue(UUID uuid) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT loan_due FROM bank_data WHERE uuid=?"
         )) {
+
             ps.setString(1, uuid.toString());
+
             ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getDate("loan_due");
+
+            if (rs.next()) {
+                return rs.getDate("loan_due");
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return null;
     }
 
     public void setLoanDue(UUID uuid, java.util.Date date) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "UPDATE bank_data SET loan_due=? WHERE uuid=?"
         )) {
+
             ps.setDate(1, new java.sql.Date(date.getTime()));
             ps.setString(2, uuid.toString());
+
             ps.executeUpdate();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void clearLoanDue(UUID uuid) {
+
         try (PreparedStatement ps = connection.prepareStatement(
                 "UPDATE bank_data SET loan_due=NULL WHERE uuid=?"
         )) {
+
             ps.setString(1, uuid.toString());
+
             ps.executeUpdate();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -222,13 +290,24 @@ public class MySQLManager {
         List<UUID> list = new ArrayList<>();
 
         try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT uuid FROM bank_data"
+                "SELECT DISTINCT uuid FROM bank_data WHERE uuid IS NOT NULL"
         )) {
 
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                list.add(UUID.fromString(rs.getString("uuid")));
+
+                try {
+
+                    UUID uuid = UUID.fromString(rs.getString("uuid"));
+
+                    // ★ 名前取得できる人だけ
+                    if (Bukkit.getOfflinePlayer(uuid).getName() != null) {
+                        list.add(uuid);
+                    }
+
+                } catch (Exception ignored) {
+                }
             }
 
         } catch (Exception e) {

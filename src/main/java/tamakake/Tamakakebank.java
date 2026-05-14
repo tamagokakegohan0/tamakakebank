@@ -14,6 +14,7 @@ import tamakake.atm.ATMListener;
 import tamakake.command.BankCommand;
 import tamakake.command.BankOpCommand;
 import tamakake.command.PayCommand;
+import tamakake.command.BalTopCommand;
 
 import tamakake.database.MySQLManager;
 import tamakake.debt.LoanCommand;
@@ -43,6 +44,7 @@ public class Tamakakebank extends JavaPlugin implements Listener {
     public void onEnable() {
 
         instance = this;
+
         saveDefaultConfig();
 
         // ================= MySQL =================
@@ -73,55 +75,54 @@ public class Tamakakebank extends JavaPlugin implements Listener {
         economy = (rsp != null) ? rsp.getProvider() : null;
 
         if (economy == null) {
-            getLogger().severe("Economy登録失敗（Vault連携エラー）");
+            getLogger().severe("Economy登録失敗");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
         getLogger().info("Vault Economy 登録成功");
 
-        // ================= コマンド登録（安全版） =================
+        // ================= コマンド =================
         register("atm", new ATMCommand(this));
         register("loan", new LoanCommand(this));
 
         register("bank", new BankCommand(this));
-        register("bankop", new BankOpCommand(this));
+        register("bal", new BankCommand(this));
+        register("balance", new BankCommand(this));
+        register("money", new BankCommand(this));
 
-        // ※ plugin.ymlにあるなら追加（反応しない系対策）
-        registerIfExists("bal", new BankCommand(this));
-        registerIfExists("balance", new BankCommand(this));
-        registerIfExists("money", new BankCommand(this));
+        register("bankop", new BankOpCommand(this));
         register("pay", new PayCommand(this));
+        register("baltop", new BalTopCommand(this));
 
         // ================= リスナー =================
         Bukkit.getPluginManager().registerEvents(new ATMListener(this), this);
         Bukkit.getPluginManager().registerEvents(this, this);
 
-        // ================= 利息（5分） =================
+        // ================= 利息 =================
         new LoanInterestTask(this)
                 .runTaskTimer(this, 20L, 20L * 60 * 5);
 
         getLogger().info("TamakakeBank 起動完了");
     }
 
-    // ================= 強制登録 =================
+    // ================= コマンド登録 =================
     private void register(String name, Object executor) {
+
         if (getCommand(name) == null) {
-            getLogger().warning("plugin.ymlに未定義コマンド: " + name);
+            getLogger().warning("plugin.ymlに未定義: " + name);
             return;
         }
-        getCommand(name).setExecutor((org.bukkit.command.CommandExecutor) executor);
+
+        getCommand(name).setExecutor(
+                (org.bukkit.command.CommandExecutor) executor
+        );
     }
 
-    // ================= ある場合のみ登録 =================
-    private void registerIfExists(String name, Object executor) {
-        if (getCommand(name) == null) return;
-        getCommand(name).setExecutor((org.bukkit.command.CommandExecutor) executor);
-    }
-
-    // ================= プレイヤー登録 =================
+    // ================= 初回登録 =================
     @org.bukkit.event.EventHandler
     public void onJoin(PlayerJoinEvent e) {
+
         mysql.registerPlayer(
                 e.getPlayer().getUniqueId(),
                 e.getPlayer().getName()

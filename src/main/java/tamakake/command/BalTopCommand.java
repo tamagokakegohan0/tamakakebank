@@ -1,13 +1,13 @@
 package tamakake.command;
 
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import tamakake.Tamakakebank;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import java.util.*;
 
 public class BalTopCommand implements CommandExecutor {
 
@@ -20,35 +20,57 @@ public class BalTopCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
-        sender.sendMessage("§7==========");
-        sender.sendMessage("§e   baltop");
-        sender.sendMessage("§7==========");
+        Set<UUID> users = new HashSet<>(plugin.getMysql().getAllUsers());
 
-        try (Connection conn = plugin.getMysql().getConnection()) {
+        // ★ 同じ名前を統合
+        Map<String, Long> balances = new HashMap<>();
 
-            String sql = "SELECT name, balance FROM players ORDER BY balance DESC LIMIT 10";
+        for (UUID uuid : users) {
 
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ResultSet rs = ps.executeQuery();
+            OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
 
-            int rank = 1;
+            String name = player.getName();
 
-            while (rs.next()) {
+            if (name == null || name.isEmpty()) continue;
 
-                String name = rs.getString("name");
-                long balance = rs.getLong("balance");
+            long balance = plugin.getMysql().getBalance(uuid);
 
-                sender.sendMessage("§e" + rank + "位: §f" + name + " §7- §a" + balance);
+            // ★ 同名なら高い方を採用
+            if (balances.containsKey(name)) {
 
-                rank++;
+                if (balance > balances.get(name)) {
+                    balances.put(name, balance);
+                }
+
+            } else {
+                balances.put(name, balance);
             }
-
-        } catch (Exception e) {
-            sender.sendMessage("§cランキング取得失敗");
-            e.printStackTrace();
         }
 
-        sender.sendMessage("§7==========");
+        List<Map.Entry<String, Long>> sorted =
+                new ArrayList<>(balances.entrySet());
+
+        sorted.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
+
+        sender.sendMessage("§e===== Baltop =====");
+
+        int rank = 1;
+
+        for (Map.Entry<String, Long> entry : sorted) {
+
+            sender.sendMessage(
+                    "§6#" + rank +
+                            " §f" + entry.getKey() +
+                            " §7- §a" +
+                            String.format("%,d円", entry.getValue())
+            );
+
+            rank++;
+
+            if (rank > 10) break;
+        }
+
+        sender.sendMessage("§e==================");
 
         return true;
     }

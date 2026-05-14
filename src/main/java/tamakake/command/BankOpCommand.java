@@ -16,7 +16,6 @@ public class BankOpCommand implements CommandExecutor {
         this.plugin = plugin;
     }
 
-    // Vault取得（方法A）
     private Economy eco() {
         return Bukkit.getServicesManager()
                 .getRegistration(Economy.class)
@@ -31,18 +30,38 @@ public class BankOpCommand implements CommandExecutor {
             return true;
         }
 
-        if (args.length < 3) {
-            sender.sendMessage("§c使い方: /bankop setbank <player> <金額>");
+        if (args.length < 2) {
+            sender.sendMessage("§c/bankop setbank <player> <金額>");
+            sender.sendMessage("§c/bankop give <player> <金額>");
+            sender.sendMessage("§c/bankop checkbank <player>");
             return true;
         }
 
-        if (!args[0].equalsIgnoreCase("setbank")) {
-            sender.sendMessage("§c使い方: /bankop setbank <player> <金額>");
-            return true;
-        }
+        String sub = args[0];
 
         OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
         UUID uuid = target.getUniqueId();
+
+        // ================= checkbank =================
+        if (sub.equalsIgnoreCase("checkbank")) {
+
+            long balance = plugin.getMysql().getBalance(uuid);
+            long debt = plugin.getMysql().getDebt(uuid);
+
+            sender.sendMessage("§e======銀行情報======");
+            sender.sendMessage("§7player: §f" + target.getName());
+            sender.sendMessage("§7残高: §a" + String.format("%,d円", balance));
+            sender.sendMessage("§7借金: §c" + String.format("%,d円", debt));
+            sender.sendMessage("§e===================");
+
+            return true;
+        }
+
+        if (args.length < 3) {
+            sender.sendMessage("§c/bankop setbank <player> <金額>");
+            sender.sendMessage("§c/bankop give <player> <金額>");
+            return true;
+        }
 
         long amount;
 
@@ -54,23 +73,46 @@ public class BankOpCommand implements CommandExecutor {
         }
 
         if (amount < 0) {
-            sender.sendMessage("§cマイナスは使えません");
+            sender.sendMessage("§cマイナスは不可");
             return true;
         }
 
-        // =========================
-        // 💥 Vaultを直接操作（これが正解）
-        // =========================
+        // ================= setbank =================
+        if (sub.equalsIgnoreCase("setbank")) {
 
-        double current = eco().getBalance(target);
+            double current = eco().getBalance(target);
 
-        if (current > amount) {
-            eco().withdrawPlayer(target, current - amount);
-        } else {
-            eco().depositPlayer(target, amount - current);
+            if (current > amount) {
+                eco().withdrawPlayer(target, current - amount);
+            } else {
+                eco().depositPlayer(target, amount - current);
+            }
+
+            sender.sendMessage("§a" + target.getName() + " の残高を §e"
+                    + String.format("%,d円", amount) + " §aに設定しました");
+
+            return true;
         }
 
-        sender.sendMessage("§a" + target.getName() + " の所持金を §e" + amount + "円 §aに設定しました");
+        // ================= give =================
+        if (sub.equalsIgnoreCase("give")) {
+
+            eco().depositPlayer(target, amount);
+
+            sender.sendMessage("§a" + target.getName() + " に §e"
+                    + String.format("%,d円", amount) + " §a付与しました");
+
+            if (target.isOnline()) {
+                target.getPlayer().sendMessage("§a銀行口座に §e"
+                        + String.format("%,d円", amount) + " §a振り込まれました");
+            }
+
+            return true;
+        }
+
+        sender.sendMessage("§c/bankop setbank <player> <金額>");
+        sender.sendMessage("§c/bankop give <player> <金額>");
+        sender.sendMessage("§c/bankop checkbank <player>");
 
         return true;
     }
